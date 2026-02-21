@@ -344,6 +344,137 @@
     }
 
     // ===================================================================
+    //  EXPRESSION BUILDERS — grid construction animation
+    // ===================================================================
+
+    function exprGridTrimDraw(phaseStart, phaseEnd, idx, total) {
+        var normT = total > 1 ? (idx + '.0 / ' + (total - 1) + '.0') : '0';
+        return [
+            EASE_SNIPPET,
+            'var _tl = clamp(C.effect("Timeline")(1), 0, 100);',
+            'var _raw = clamp((_tl - ' + phaseStart + ') / ' + (phaseEnd - phaseStart) + ', 0, 1);',
+            'var _sg = clamp(C.effect("Stagger")(1), 0, 100) / 100;',
+            'var _si = ' + normT + ';',
+            'var _start = _si * _sg;',
+            'var _w = Math.max(1 - _sg, 0.01);',
+            'var _p = clamp((_raw - _start) / _w, 0, 1);',
+            'ez(_p) * 100;'
+        ].join('\n');
+    }
+
+    function exprGridScalePop(phaseStart, phaseEnd, idx, total) {
+        var normT = total > 1 ? (idx + '.0 / ' + (total - 1) + '.0') : '0';
+        return [
+            EASE_SNIPPET,
+            'var _tl = clamp(C.effect("Timeline")(1), 0, 100);',
+            'var _raw = clamp((_tl - ' + phaseStart + ') / ' + (phaseEnd - phaseStart) + ', 0, 1);',
+            'var _sg = clamp(C.effect("Stagger")(1), 0, 100) / 100;',
+            'var _si = ' + normT + ';',
+            'var _start = _si * _sg;',
+            'var _w = Math.max(1 - _sg, 0.01);',
+            'var _p = clamp((_raw - _start) / _w, 0, 1);',
+            'var _s = ez(_p) * 100;',
+            '[_s, _s];'
+        ].join('\n');
+    }
+
+    // ===================================================================
+    //  EXPRESSION BUILDERS — geometric constructions
+    // ===================================================================
+
+    function exprCircumcirclePos(layerName, chain, pathName, vi, vj, vk) {
+        var pathRef = buildPathExpr(layerName, chain, pathName);
+        return [
+            'var pathRef = ' + pathRef + ';',
+            'var pts = pathRef.points();',
+            buildGroupTransformExpr(layerName, chain),
+            buildLayerTransformExpr(layerName),
+            'var p1=applyLT(applyGT(pts[' + vi + ']));',
+            'var p2=applyLT(applyGT(pts[' + vj + ']));',
+            'var p3=applyLT(applyGT(pts[' + vk + ']));',
+            'var D=2*(p1[0]*(p2[1]-p3[1])+p2[0]*(p3[1]-p1[1])+p3[0]*(p1[1]-p2[1]));',
+            'if(Math.abs(D)<0.001)[0,0];',
+            'else{var a2=p1[0]*p1[0]+p1[1]*p1[1],b2=p2[0]*p2[0]+p2[1]*p2[1],c2=p3[0]*p3[0]+p3[1]*p3[1];',
+            '[(a2*(p2[1]-p3[1])+b2*(p3[1]-p1[1])+c2*(p1[1]-p2[1]))/D,',
+            '(a2*(p3[0]-p2[0])+b2*(p1[0]-p3[0])+c2*(p2[0]-p1[0]))/D];}'
+        ].join('\n');
+    }
+
+    function exprCircumcircleSize(layerName, chain, pathName, vi, vj, vk) {
+        var pathRef = buildPathExpr(layerName, chain, pathName);
+        return [
+            'var pathRef = ' + pathRef + ';',
+            'var pts = pathRef.points();',
+            buildGroupTransformExpr(layerName, chain),
+            buildLayerTransformExpr(layerName),
+            'var p1=applyLT(applyGT(pts[' + vi + ']));',
+            'var p2=applyLT(applyGT(pts[' + vj + ']));',
+            'var p3=applyLT(applyGT(pts[' + vk + ']));',
+            'var D=2*(p1[0]*(p2[1]-p3[1])+p2[0]*(p3[1]-p1[1])+p3[0]*(p1[1]-p2[1]));',
+            'if(Math.abs(D)<0.001)[0,0];',
+            'else{var a2=p1[0]*p1[0]+p1[1]*p1[1],b2=p2[0]*p2[0]+p2[1]*p2[1],c2=p3[0]*p3[0]+p3[1]*p3[1];',
+            'var cx=(a2*(p2[1]-p3[1])+b2*(p3[1]-p1[1])+c2*(p1[1]-p2[1]))/D;',
+            'var cy=(a2*(p3[0]-p2[0])+b2*(p1[0]-p3[0])+c2*(p2[0]-p1[0]))/D;',
+            'var r=Math.sqrt((cx-p1[0])*(cx-p1[0])+(cy-p1[1])*(cy-p1[1]));',
+            '[r*2,r*2];}'
+        ].join('\n');
+    }
+
+    function exprTangentLinePath(layerName, chain, pathName, vi, tanType) {
+        var pathRef = buildPathExpr(layerName, chain, pathName);
+        var tanMethod = tanType === "out" ? "outTangents" : "inTangents";
+        return [
+            'var C = ' + CTRL + ';',
+            'var len = C.effect("Tangent Length")(1);',
+            'var pathRef = ' + pathRef + ';',
+            'var v = pathRef.points()[' + vi + '];',
+            'var t = pathRef.' + tanMethod + '()[' + vi + '];',
+            'var localEnd = [v[0]+t[0],v[1]+t[1]];',
+            buildGroupTransformExpr(layerName, chain),
+            buildLayerTransformExpr(layerName),
+            'var cv = applyLT(applyGT(v));',
+            'var ce = applyLT(applyGT(localEnd));',
+            'var dx=ce[0]-cv[0],dy=ce[1]-cv[1];',
+            'var d=Math.sqrt(dx*dx+dy*dy);',
+            'if(d>0.001){dx/=d;dy/=d;}',
+            'createPath([cv,[cv[0]+dx*len,cv[1]+dy*len]],[],[],false);'
+        ].join('\n');
+    }
+
+    function exprDiagonalPath(layerName, chain, pathName, vi, vj) {
+        var pathRef = buildPathExpr(layerName, chain, pathName);
+        return [
+            'var pathRef = ' + pathRef + ';',
+            'var pts = pathRef.points();',
+            buildGroupTransformExpr(layerName, chain),
+            buildLayerTransformExpr(layerName),
+            'var p1=applyLT(applyGT(pts[' + vi + ']));',
+            'var p2=applyLT(applyGT(pts[' + vj + ']));',
+            'createPath([p1,p2],[],[],false);'
+        ].join('\n');
+    }
+
+    function exprBisectorPath(layerName, chain, pathName, vi, vj) {
+        var pathRef = buildPathExpr(layerName, chain, pathName);
+        return [
+            'var C = ' + CTRL + ';',
+            'var len = C.effect("Bisector Length")(1);',
+            'var pathRef = ' + pathRef + ';',
+            'var pts = pathRef.points();',
+            buildGroupTransformExpr(layerName, chain),
+            buildLayerTransformExpr(layerName),
+            'var v0=applyLT(applyGT(pts[' + vi + ']));',
+            'var v1=applyLT(applyGT(pts[' + vj + ']));',
+            'var mx=(v0[0]+v1[0])/2,my=(v0[1]+v1[1])/2;',
+            'var ex=v1[0]-v0[0],ey=v1[1]-v0[1];',
+            'var el=Math.sqrt(ex*ex+ey*ey);',
+            'if(el<0.001)createPath([[mx,my],[mx,my]],[],[],false);',
+            'else{var px=-ey/el,py=ex/el;',
+            'createPath([[mx-px*len,my-py*len],[mx+px*len,my+py*len]],[],[],false);}'
+        ].join('\n');
+    }
+
+    // ===================================================================
     //  HELPERS
     // ===================================================================
 
@@ -394,6 +525,82 @@
     }
 
     // ===================================================================
+    //  GEOMETRIC CONSTRUCTION HELPERS
+    // ===================================================================
+
+    function delaunayTriangulate(points) {
+        if (points.length < 3) return [];
+        var minX = points[0][0], maxX = points[0][0];
+        var minY = points[0][1], maxY = points[0][1];
+        for (var i = 1; i < points.length; i++) {
+            if (points[i][0] < minX) minX = points[i][0];
+            if (points[i][0] > maxX) maxX = points[i][0];
+            if (points[i][1] < minY) minY = points[i][1];
+            if (points[i][1] > maxY) maxY = points[i][1];
+        }
+        var cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        var dmax = Math.max(maxX - minX, maxY - minY) * 3;
+        var st0 = [cx - dmax, cy - dmax];
+        var st1 = [cx + dmax, cy - dmax];
+        var st2 = [cx, cy + dmax];
+        var allPts = [];
+        for (var pi = 0; pi < points.length; pi++) allPts.push(points[pi]);
+        var sI0 = allPts.length; allPts.push(st0);
+        var sI1 = allPts.length; allPts.push(st1);
+        var sI2 = allPts.length; allPts.push(st2);
+        var triangles = [[sI0, sI1, sI2]];
+
+        for (var p = 0; p < points.length; p++) {
+            var px = points[p][0], py = points[p][1];
+            var bad = [];
+            for (var t = 0; t < triangles.length; t++) {
+                var tr = triangles[t];
+                var ax = allPts[tr[0]][0], ay = allPts[tr[0]][1];
+                var bx = allPts[tr[1]][0], by = allPts[tr[1]][1];
+                var ccx = allPts[tr[2]][0], ccy = allPts[tr[2]][1];
+                var D = 2 * (ax * (by - ccy) + bx * (ccy - ay) + ccx * (ay - by));
+                if (Math.abs(D) < 1e-10) continue;
+                var a2 = ax * ax + ay * ay;
+                var b2 = bx * bx + by * by;
+                var c2 = ccx * ccx + ccy * ccy;
+                var ux = (a2 * (by - ccy) + b2 * (ccy - ay) + c2 * (ay - by)) / D;
+                var uy = (a2 * (ccx - bx) + b2 * (ax - ccx) + c2 * (bx - ax)) / D;
+                var r2 = (ux - ax) * (ux - ax) + (uy - ay) * (uy - ay);
+                var d2 = (ux - px) * (ux - px) + (uy - py) * (uy - py);
+                if (d2 < r2 + 1e-10) bad.push(t);
+            }
+            var edges = [];
+            for (var bi = 0; bi < bad.length; bi++) {
+                var bt = triangles[bad[bi]];
+                var te = [[bt[0], bt[1]], [bt[1], bt[2]], [bt[2], bt[0]]];
+                for (var ei = 0; ei < 3; ei++) {
+                    var e = te[ei], shared = false;
+                    for (var bj = 0; bj < bad.length; bj++) {
+                        if (bj === bi) continue;
+                        var bt2 = triangles[bad[bj]];
+                        if ((bt2[0] === e[0] || bt2[1] === e[0] || bt2[2] === e[0]) &&
+                            (bt2[0] === e[1] || bt2[1] === e[1] || bt2[2] === e[1])) {
+                            shared = true; break;
+                        }
+                    }
+                    if (!shared) edges.push(e);
+                }
+            }
+            bad.sort(function (a, b) { return b - a; });
+            for (var ri = 0; ri < bad.length; ri++) triangles.splice(bad[ri], 1);
+            for (var ei2 = 0; ei2 < edges.length; ei2++)
+                triangles.push([p, edges[ei2][0], edges[ei2][1]]);
+        }
+        var result = [];
+        for (var ti = 0; ti < triangles.length; ti++) {
+            var tr2 = triangles[ti];
+            if (tr2[0] >= points.length || tr2[1] >= points.length || tr2[2] >= points.length) continue;
+            result.push(tr2);
+        }
+        return result;
+    }
+
+    // ===================================================================
     //  NULL CONTROLLER
     // ===================================================================
 
@@ -434,7 +641,7 @@
         }
 
         // --- Opacity ---
-        var opacs = [["Grid Opacity", 40], ["Global Opacity", 100]];
+        var opacs = [["Grid Opacity", 8], ["Global Opacity", 100]];
         for (var o = 0; o < opacs.length; o++) {
             var os = ctrl.Effects.addProperty("ADBE Slider Control");
             os.name = opacs[o][0];
@@ -455,6 +662,21 @@
             var vs = ctrl.Effects.addProperty("ADBE Slider Control");
             vs.name = overrides[v][0];
             vs.property(1).setValue(overrides[v][1]);
+        }
+
+        // --- Grid construction controls ---
+        var gridCtrl = [
+            ["Circumcircle Opacity", 30],
+            ["Tangent Length", 200],
+            ["Contour Count", 3],
+            ["Contour Spacing", 8],
+            ["Bisector Length", 120],
+            ["Grid Elements Opacity", 100]
+        ];
+        for (var gc = 0; gc < gridCtrl.length; gc++) {
+            var gcs = ctrl.Effects.addProperty("ADBE Slider Control");
+            gcs.name = gridCtrl[gc][0];
+            gcs.property(1).setValue(gridCtrl[gc][1]);
         }
 
         // --- Position offsets ---
@@ -745,7 +967,8 @@
             'var C = ' + CTRL + ';',
             'var show = C.effect("Show Grid")(1);',
             'var op = C.effect("Grid Opacity")(1);',
-            'show ? op : 0;'
+            'var master = C.effect("Grid Elements Opacity")(1);',
+            'show ? op * master / 100 : 0;'
         ].join('\n');
         layer.position.expression = CTRL + '.effect("Grid Offset")(1);';
         var contents = layer.property("ADBE Root Vectors Group");
@@ -848,6 +1071,347 @@
     }
 
     // ===================================================================
+    //  GEOMETRIC CONSTRUCTION GENERATORS
+    // ===================================================================
+
+    function buildCircumcircles(comp, pathInfos, srcLayerName, srcLayer) {
+        var circles = [];
+
+        for (var pi = 0; pi < pathInfos.length; pi++) {
+            var info = pathInfos[pi];
+            var pv = info.pathProp.value;
+            var nv = pv.vertices.length;
+            if (nv < 3 || !pv.closed) continue;
+
+            var positions = [];
+            for (var vi = 0; vi < nv; vi++) {
+                positions.push(getVertexCompSpace(srcLayer, info, vi));
+            }
+
+            var bestArea = 0, bestI = 0, bestJ = 1, bestK = 2;
+            for (var i = 0; i < nv; i++) {
+                for (var j = i + 1; j < nv; j++) {
+                    for (var k = j + 1; k < nv; k++) {
+                        var area = Math.abs(
+                            positions[i][0] * (positions[j][1] - positions[k][1]) +
+                            positions[j][0] * (positions[k][1] - positions[i][1]) +
+                            positions[k][0] * (positions[i][1] - positions[j][1])
+                        );
+                        if (area > bestArea) {
+                            bestArea = area;
+                            bestI = i; bestJ = j; bestK = k;
+                        }
+                    }
+                }
+            }
+
+            if (bestArea < 10) continue;
+
+            circles.push({
+                pi: pi, vi: bestI, vj: bestJ, vk: bestK,
+                chain: info.chain, pathName: info.pathName
+            });
+        }
+
+        if (circles.length === 0) return null;
+        if (circles.length > 6) circles.length = 6;
+
+        var layer = makeShapeLayer(comp, "PP_Circumcircles");
+        layer.opacity.expression = [
+            'var C = ' + CTRL + ';',
+            'var show = C.effect("Show Grid")(1);',
+            'var master = C.effect("Grid Elements Opacity")(1);',
+            'var op = C.effect("Circumcircle Opacity")(1);',
+            'show ? master * op / 100 : 0;'
+        ].join('\n');
+        var contents = layer.property("ADBE Root Vectors Group");
+
+        for (var ci = 0; ci < circles.length; ci++) {
+            var c = circles[ci];
+            var grp = contents.addProperty("ADBE Vector Group");
+            grp.name = "CC_" + c.pi + "_" + c.vi + "_" + c.vj + "_" + c.vk;
+            var vectors = grp.property("ADBE Vectors Group");
+            var ellipse = vectors.addProperty("ADBE Vector Shape - Ellipse");
+            ellipse.property("ADBE Vector Ellipse Size").expression =
+                exprCircumcircleSize(srcLayerName, c.chain, c.pathName, c.vi, c.vj, c.vk);
+            var stroke = vectors.addProperty("ADBE Vector Graphic - Stroke");
+            stroke.property("ADBE Vector Stroke Color").setValue([1, 1, 1]);
+            stroke.property("ADBE Vector Stroke Width").setValue(0.75);
+            var xf = grp.property("ADBE Vector Transform Group");
+            xf.property("ADBE Vector Position").expression =
+                exprCircumcirclePos(srcLayerName, c.chain, c.pathName, c.vi, c.vj, c.vk);
+            xf.property("ADBE Vector Scale").expression =
+                exprGridScalePop(15, 40, ci, circles.length);
+        }
+
+        return layer;
+    }
+
+    function buildTangents(comp, pathInfos, srcLayerName) {
+        var allTangents = [];
+
+        for (var pi = 0; pi < pathInfos.length; pi++) {
+            var info = pathInfos[pi];
+            var pv = info.pathProp.value;
+            for (var vi = 0; vi < pv.vertices.length; vi++) {
+                var outT = pv.outTangents[vi];
+                var inT = pv.inTangents[vi];
+                var outLen = Math.sqrt(outT[0]*outT[0] + outT[1]*outT[1]);
+                var inLen = Math.sqrt(inT[0]*inT[0] + inT[1]*inT[1]);
+                if (outLen > 5) {
+                    allTangents.push({ pi: pi, vi: vi, type: "out", len: outLen,
+                        chain: info.chain, pathName: info.pathName });
+                }
+                if (inLen > 5) {
+                    allTangents.push({ pi: pi, vi: vi, type: "in", len: inLen,
+                        chain: info.chain, pathName: info.pathName });
+                }
+            }
+        }
+
+        if (allTangents.length === 0) return null;
+        allTangents.sort(function(a, b) { return b.len - a.len; });
+        if (allTangents.length > 12) allTangents.length = 12;
+
+        var layer = makeShapeLayer(comp, "PP_Tangents");
+        layer.opacity.expression = [
+            'var C = ' + CTRL + ';',
+            'var show = C.effect("Show Grid")(1);',
+            'var master = C.effect("Grid Elements Opacity")(1);',
+            'show ? master * 20 / 100 : 0;'
+        ].join('\n');
+        var contents = layer.property("ADBE Root Vectors Group");
+
+        for (var ti = 0; ti < allTangents.length; ti++) {
+            var t = allTangents[ti];
+            var prefix = t.type === "out" ? "TO" : "TI";
+            var grp = contents.addProperty("ADBE Vector Group");
+            grp.name = prefix + "_" + t.pi + "_" + t.vi;
+            var vectors = grp.property("ADBE Vectors Group");
+            var ps = vectors.addProperty("ADBE Vector Shape - Group");
+            ps.property("ADBE Vector Shape").expression =
+                exprTangentLinePath(srcLayerName, t.chain, t.pathName, t.vi, t.type);
+            var stroke = vectors.addProperty("ADBE Vector Graphic - Stroke");
+            stroke.property("ADBE Vector Stroke Color").setValue([1, 1, 1]);
+            stroke.property("ADBE Vector Stroke Width").setValue(0.5);
+            try {
+                var dsh = stroke.property("ADBE Vector Stroke Dashes");
+                if (dsh) {
+                    var dd = dsh.addProperty("ADBE Vector Stroke Dash 1"); if (dd) dd.setValue(4);
+                    var dg = dsh.addProperty("ADBE Vector Stroke Gap 1"); if (dg) dg.setValue(6);
+                }
+            } catch (e) {}
+            var trim = vectors.addProperty("ADBE Vector Filter - Trim");
+            trim.property("ADBE Vector Trim End").expression =
+                exprGridTrimDraw(50, 75, ti, allTangents.length);
+        }
+
+        return layer;
+    }
+
+    function buildTriangulation(comp, pathInfos, srcLayerName, srcLayer) {
+        var allDiags = [];
+
+        for (var pi = 0; pi < pathInfos.length; pi++) {
+            var info = pathInfos[pi];
+            var pv = info.pathProp.value;
+            var nv = pv.vertices.length;
+            if (nv < 3) continue;
+
+            var positions = [];
+            for (var vi = 0; vi < nv; vi++) {
+                positions.push(getVertexCompSpace(srcLayer, info, vi));
+            }
+
+            var triangles = delaunayTriangulate(positions);
+
+            var edgeMap = {};
+            for (var ti = 0; ti < triangles.length; ti++) {
+                var tri = triangles[ti];
+                var edges = [[tri[0], tri[1]], [tri[1], tri[2]], [tri[2], tri[0]]];
+                for (var ei = 0; ei < 3; ei++) {
+                    var a = Math.min(edges[ei][0], edges[ei][1]);
+                    var b = Math.max(edges[ei][0], edges[ei][1]);
+                    var key = a + "_" + b;
+                    if (!edgeMap[key]) {
+                        var isAdj = (b - a === 1) || (pv.closed && a === 0 && b === nv - 1);
+                        if (!isAdj) {
+                            var pos0 = positions[a], pos1 = positions[b];
+                            var dx = pos1[0] - pos0[0], dy = pos1[1] - pos0[1];
+                            edgeMap[key] = { pi: pi, vi: a, vj: b,
+                                len: Math.sqrt(dx*dx + dy*dy),
+                                chain: info.chain, pathName: info.pathName };
+                        }
+                    }
+                }
+            }
+
+            for (var key in edgeMap) {
+                if (edgeMap.hasOwnProperty(key)) allDiags.push(edgeMap[key]);
+            }
+        }
+
+        if (allDiags.length === 0) return null;
+        allDiags.sort(function(a, b) { return b.len - a.len; });
+        if (allDiags.length > 15) allDiags.length = 15;
+
+        var layer = makeShapeLayer(comp, "PP_Triangulation");
+        layer.opacity.expression = [
+            'var C = ' + CTRL + ';',
+            'var show = C.effect("Show Grid")(1);',
+            'var master = C.effect("Grid Elements Opacity")(1);',
+            'show ? master * 15 / 100 : 0;'
+        ].join('\n');
+        var contents = layer.property("ADBE Root Vectors Group");
+
+        for (var di = 0; di < allDiags.length; di++) {
+            var diag = allDiags[di];
+            var dinfo = pathInfos[diag.pi];
+            var grp = contents.addProperty("ADBE Vector Group");
+            grp.name = "DG_" + diag.pi + "_" + diag.vi + "_" + diag.vj;
+            var vectors = grp.property("ADBE Vectors Group");
+            var ps = vectors.addProperty("ADBE Vector Shape - Group");
+            ps.property("ADBE Vector Shape").expression =
+                exprDiagonalPath(srcLayerName, dinfo.chain, dinfo.pathName, diag.vi, diag.vj);
+            var stroke = vectors.addProperty("ADBE Vector Graphic - Stroke");
+            stroke.property("ADBE Vector Stroke Color").setValue([1, 1, 1]);
+            stroke.property("ADBE Vector Stroke Width").setValue(0.5);
+            var trim = vectors.addProperty("ADBE Vector Filter - Trim");
+            trim.property("ADBE Vector Trim End").expression =
+                exprGridTrimDraw(25, 55, di, allDiags.length);
+        }
+
+        return layer;
+    }
+
+    function buildOffsetContours(comp, pathInfos, srcLayerName) {
+        var levels = 3;
+        var spacingMults = [1, 2.5, 5];
+        var opacities = [25, 15, 8];
+        var strokeWidths = [0.5, 0.4, 0.3];
+
+        var layer = makeShapeLayer(comp, "PP_OffsetContours");
+        layer.opacity.expression = [
+            'var C = ' + CTRL + ';',
+            'var show = C.effect("Show Grid")(1);',
+            'var master = C.effect("Grid Elements Opacity")(1);',
+            'show ? master : 0;'
+        ].join('\n');
+        var contents = layer.property("ADBE Root Vectors Group");
+
+        var contourIdx = 0;
+        var totalContours = 0;
+        for (var pi0 = 0; pi0 < pathInfos.length; pi0++) {
+            if (pathInfos[pi0].pathProp.value.closed && pathInfos[pi0].pathProp.value.vertices.length >= 3)
+                totalContours += levels;
+        }
+        if (totalContours === 0) return null;
+
+        for (var pi = 0; pi < pathInfos.length; pi++) {
+            var info = pathInfos[pi];
+            var pv = info.pathProp.value;
+            if (!pv.closed || pv.vertices.length < 3) continue;
+
+            for (var li = 0; li < levels; li++) {
+                var grp = contents.addProperty("ADBE Vector Group");
+                grp.name = "OC_" + pi + "_" + li;
+                var vectors = grp.property("ADBE Vectors Group");
+
+                vectors.addProperty("ADBE Vector Shape - Group")
+                       .property("ADBE Vector Shape")
+                       .expression = exprOutlineCompPath(
+                           srcLayerName, info.chain, info.pathName,
+                           pv.vertices.length, pv.closed
+                       );
+
+                try {
+                    var offset = vectors.addProperty("ADBE Vector Filter - Offset");
+                    offset.property("ADBE Vector Offset Amount").expression =
+                        CTRL + '.effect("Contour Spacing")(1) * ' + spacingMults[li] + ';';
+                    try { offset.property("ADBE Vector Offset Line Join").setValue(2); } catch(e2) {}
+                } catch (e) {}
+
+                var stroke = vectors.addProperty("ADBE Vector Graphic - Stroke");
+                stroke.property("ADBE Vector Stroke Color").setValue([1, 1, 1]);
+                stroke.property("ADBE Vector Stroke Width").setValue(strokeWidths[li]);
+
+                var trim = vectors.addProperty("ADBE Vector Filter - Trim");
+                trim.property("ADBE Vector Trim End").expression =
+                    exprGridTrimDraw(35, 65, contourIdx, totalContours);
+
+                var xf = grp.property("ADBE Vector Transform Group");
+                xf.property("ADBE Vector Group Opacity").expression =
+                    CTRL + '.effect("Contour Count")(1) >= ' + (li + 1) + ' ? ' + opacities[li] + ' : 0;';
+
+                contourIdx++;
+            }
+        }
+
+        return layer;
+    }
+
+    function buildBisectors(comp, pathInfos, srcLayerName, srcLayer) {
+        var allBisectors = [];
+
+        for (var pi = 0; pi < pathInfos.length; pi++) {
+            var info = pathInfos[pi];
+            var pv = info.pathProp.value;
+            var nv = pv.vertices.length;
+            var segs = pv.closed ? nv : (nv - 1);
+
+            for (var si = 0; si < segs; si++) {
+                var ni = (si + 1) % nv;
+                var v0 = getVertexCompSpace(srcLayer, info, si);
+                var v1 = getVertexCompSpace(srcLayer, info, ni);
+                var dx = v1[0] - v0[0], dy = v1[1] - v0[1];
+                var segLen = Math.sqrt(dx*dx + dy*dy);
+                if (segLen < 5) continue;
+
+                var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+                if (Math.abs(ang) < 8 || Math.abs(Math.abs(ang) - 180) < 8) continue;
+                if (Math.abs(Math.abs(ang) - 90) < 8) continue;
+
+                allBisectors.push({
+                    pi: pi, vi: si, vj: ni, len: segLen,
+                    chain: info.chain, pathName: info.pathName
+                });
+            }
+        }
+
+        if (allBisectors.length === 0) return null;
+        allBisectors.sort(function(a, b) { return b.len - a.len; });
+        if (allBisectors.length > 8) allBisectors.length = 8;
+
+        var layer = makeShapeLayer(comp, "PP_Bisectors");
+        layer.opacity.expression = [
+            'var C = ' + CTRL + ';',
+            'var show = C.effect("Show Grid")(1);',
+            'var master = C.effect("Grid Elements Opacity")(1);',
+            'show ? master * 15 / 100 : 0;'
+        ].join('\n');
+        var contents = layer.property("ADBE Root Vectors Group");
+
+        for (var bi = 0; bi < allBisectors.length; bi++) {
+            var b = allBisectors[bi];
+            var grp = contents.addProperty("ADBE Vector Group");
+            grp.name = "PB_" + b.pi + "_" + b.vi + "_" + b.vj;
+            var vectors = grp.property("ADBE Vectors Group");
+            var ps = vectors.addProperty("ADBE Vector Shape - Group");
+            ps.property("ADBE Vector Shape").expression =
+                exprBisectorPath(srcLayerName, b.chain, b.pathName, b.vi, b.vj);
+            var stroke = vectors.addProperty("ADBE Vector Graphic - Stroke");
+            stroke.property("ADBE Vector Stroke Color").setValue([1, 1, 1]);
+            stroke.property("ADBE Vector Stroke Width").setValue(0.5);
+            var trim = vectors.addProperty("ADBE Vector Filter - Trim");
+            trim.property("ADBE Vector Trim End").expression =
+                exprGridTrimDraw(0, 20, bi, allBisectors.length);
+        }
+
+        return layer;
+    }
+
+
+    // ===================================================================
     //  MAIN BUILD
     // ===================================================================
 
@@ -876,6 +1440,13 @@
             createController(comp);
 
             buildGrid(comp, pathInfos, srcLayer);
+
+            buildCircumcircles(comp, pathInfos, srcName, srcLayer);
+            buildTangents(comp, pathInfos, srcName);
+            buildTriangulation(comp, pathInfos, srcName, srcLayer);
+            buildOffsetContours(comp, pathInfos, srcName);
+            buildBisectors(comp, pathInfos, srcName, srcLayer);
+
             buildOutlines(comp, pathInfos, srcName);
             buildHandles(comp, pathInfos, srcName);
             buildAnchors(comp, pathInfos, srcName);
@@ -884,8 +1455,9 @@
             app.endUndoGroup();
             alert("Path Plugin v3 built!\n" +
                   pathInfos.length + " path(s), " + totalVerts + " vertices.\n\n" +
-                  "Keyframe 'Timeline' (0\u2192100) for choreographed reveal.\n" +
-                  "Or use per-element sliders for individual control.");
+                  "All geometry is expression-linked to source.\n" +
+                  "Use BAKE to edit outlines with pen tool.\n\n" +
+                  "Keyframe 'Timeline' (0\u2192100) for reveal.");
         } catch (e) {
             app.endUndoGroup();
             var line = (e && e.line) ? (" (line " + e.line + ")") : "";
@@ -1229,12 +1801,199 @@
             }
         }
 
+        // Re-link PP_Circumcircles
+        var ccLayer = null;
+        for (var ccfi = 1; ccfi <= comp.numLayers; ccfi++) {
+            if (comp.layer(ccfi).name === "PP_Circumcircles") { ccLayer = comp.layer(ccfi); break; }
+        }
+        if (ccLayer) {
+            var ccRoot = ccLayer.property("ADBE Root Vectors Group");
+            for (var ccgi = 1; ccgi <= ccRoot.numProperties; ccgi++) {
+                var ccGrp = ccRoot.property(ccgi);
+                if (!ccGrp || ccGrp.matchName !== "ADBE Vector Group") continue;
+                var ccm = ccGrp.name.match(/^CC_(\d+)_(\d+)_(\d+)_(\d+)$/);
+                if (!ccm) continue;
+                var ccPI = parseInt(ccm[1], 10);
+                if (ccPI >= bakedPaths.length) continue;
+                var ccBP = bakedPaths[ccPI];
+                var ccVI = parseInt(ccm[2], 10), ccVJ = parseInt(ccm[3], 10), ccVK = parseInt(ccm[4], 10);
+                var ccRef = 'thisComp.layer("' + esc(oName) + '").content("' + esc(ccBP.groupName) + '").content("' + esc(ccBP.shapeName) + '").path';
+
+                ccGrp.property("ADBE Vector Transform Group")
+                     .property("ADBE Vector Position").expression = [
+                    'var pts = ' + ccRef + '.points();',
+                    'var p1=pts[' + ccVI + '],p2=pts[' + ccVJ + '],p3=pts[' + ccVK + '];',
+                    'var D=2*(p1[0]*(p2[1]-p3[1])+p2[0]*(p3[1]-p1[1])+p3[0]*(p1[1]-p2[1]));',
+                    'if(Math.abs(D)<0.001)[0,0];',
+                    'else{var a2=p1[0]*p1[0]+p1[1]*p1[1],b2=p2[0]*p2[0]+p2[1]*p2[1],c2=p3[0]*p3[0]+p3[1]*p3[1];',
+                    '[(a2*(p2[1]-p3[1])+b2*(p3[1]-p1[1])+c2*(p1[1]-p2[1]))/D,',
+                    '(a2*(p3[0]-p2[0])+b2*(p1[0]-p3[0])+c2*(p2[0]-p1[0]))/D];}'
+                ].join('\n');
+
+                var ccVecs = ccGrp.property("ADBE Vectors Group");
+                for (var ccsi = 1; ccsi <= ccVecs.numProperties; ccsi++) {
+                    if (ccVecs.property(ccsi).matchName === "ADBE Vector Shape - Ellipse") {
+                        ccVecs.property(ccsi).property("ADBE Vector Ellipse Size").expression = [
+                            'var pts = ' + ccRef + '.points();',
+                            'var p1=pts[' + ccVI + '],p2=pts[' + ccVJ + '],p3=pts[' + ccVK + '];',
+                            'var D=2*(p1[0]*(p2[1]-p3[1])+p2[0]*(p3[1]-p1[1])+p3[0]*(p1[1]-p2[1]));',
+                            'if(Math.abs(D)<0.001)[0,0];',
+                            'else{var a2=p1[0]*p1[0]+p1[1]*p1[1],b2=p2[0]*p2[0]+p2[1]*p2[1],c2=p3[0]*p3[0]+p3[1]*p3[1];',
+                            'var cx=(a2*(p2[1]-p3[1])+b2*(p3[1]-p1[1])+c2*(p1[1]-p2[1]))/D;',
+                            'var cy=(a2*(p3[0]-p2[0])+b2*(p1[0]-p3[0])+c2*(p2[0]-p1[0]))/D;',
+                            'var r=Math.sqrt((cx-p1[0])*(cx-p1[0])+(cy-p1[1])*(cy-p1[1]));',
+                            '[r*2,r*2];}'
+                        ].join('\n');
+                    }
+                }
+            }
+        }
+
+        // Re-link PP_Tangents
+        var tanLayer = null;
+        for (var tanfi = 1; tanfi <= comp.numLayers; tanfi++) {
+            if (comp.layer(tanfi).name === "PP_Tangents") { tanLayer = comp.layer(tanfi); break; }
+        }
+        if (tanLayer) {
+            var tanRoot = tanLayer.property("ADBE Root Vectors Group");
+            for (var tangi = 1; tangi <= tanRoot.numProperties; tangi++) {
+                var tanGrp = tanRoot.property(tangi);
+                if (!tanGrp || tanGrp.matchName !== "ADBE Vector Group") continue;
+                var tanm = tanGrp.name.match(/^T([IO])_(\d+)_(\d+)$/);
+                if (!tanm) continue;
+                var tanType = tanm[1] === "O" ? "outTangents" : "inTangents";
+                var tanPI = parseInt(tanm[2], 10), tanVI = parseInt(tanm[3], 10);
+                if (tanPI >= bakedPaths.length) continue;
+                var tanBP = bakedPaths[tanPI];
+                var tanRef = 'thisComp.layer("' + esc(oName) + '").content("' + esc(tanBP.groupName) + '").content("' + esc(tanBP.shapeName) + '").path';
+
+                var tanVecs = tanGrp.property("ADBE Vectors Group");
+                for (var tansi = 1; tansi <= tanVecs.numProperties; tansi++) {
+                    if (tanVecs.property(tansi).matchName === "ADBE Vector Shape - Group") {
+                        tanVecs.property(tansi).property("ADBE Vector Shape").expression = [
+                            'var C = ' + CTRL + ';',
+                            'var len = C.effect("Tangent Length")(1);',
+                            'var pts = ' + tanRef + '.points();',
+                            'var tans = ' + tanRef + '.' + tanType + '();',
+                            'var v = pts[' + tanVI + '];',
+                            'var t = tans[' + tanVI + '];',
+                            'var ce = [v[0]+t[0],v[1]+t[1]];',
+                            'var dx=ce[0]-v[0],dy=ce[1]-v[1];',
+                            'var d=Math.sqrt(dx*dx+dy*dy);',
+                            'if(d>0.001){dx/=d;dy/=d;}',
+                            'createPath([v,[v[0]+dx*len,v[1]+dy*len]],[],[],false);'
+                        ].join('\n');
+                    }
+                }
+            }
+        }
+
+        // Re-link PP_Triangulation
+        var triLayer = null;
+        for (var trifi = 1; trifi <= comp.numLayers; trifi++) {
+            if (comp.layer(trifi).name === "PP_Triangulation") { triLayer = comp.layer(trifi); break; }
+        }
+        if (triLayer) {
+            var triRoot = triLayer.property("ADBE Root Vectors Group");
+            for (var trigi = 1; trigi <= triRoot.numProperties; trigi++) {
+                var triGrp = triRoot.property(trigi);
+                if (!triGrp || triGrp.matchName !== "ADBE Vector Group") continue;
+                var dgm = triGrp.name.match(/^DG_(\d+)_(\d+)_(\d+)$/);
+                if (!dgm) continue;
+                var dgPI = parseInt(dgm[1], 10);
+                var dgVI = parseInt(dgm[2], 10), dgVJ = parseInt(dgm[3], 10);
+                if (dgPI >= bakedPaths.length) continue;
+                var dgBP = bakedPaths[dgPI];
+                var dgRef = 'thisComp.layer("' + esc(oName) + '").content("' + esc(dgBP.groupName) + '").content("' + esc(dgBP.shapeName) + '").path';
+
+                var dgVecs = triGrp.property("ADBE Vectors Group");
+                for (var dgsi = 1; dgsi <= dgVecs.numProperties; dgsi++) {
+                    if (dgVecs.property(dgsi).matchName === "ADBE Vector Shape - Group") {
+                        dgVecs.property(dgsi).property("ADBE Vector Shape").expression = [
+                            'var pts = ' + dgRef + '.points();',
+                            'createPath([pts[' + dgVI + '],pts[' + dgVJ + ']],[],[],false);'
+                        ].join('\n');
+                    }
+                }
+            }
+        }
+
+        // Re-link PP_OffsetContours
+        var ocLayer = null;
+        for (var ocfi = 1; ocfi <= comp.numLayers; ocfi++) {
+            if (comp.layer(ocfi).name === "PP_OffsetContours") { ocLayer = comp.layer(ocfi); break; }
+        }
+        if (ocLayer) {
+            var ocRoot = ocLayer.property("ADBE Root Vectors Group");
+            for (var ocgi = 1; ocgi <= ocRoot.numProperties; ocgi++) {
+                var ocGrp = ocRoot.property(ocgi);
+                if (!ocGrp || ocGrp.matchName !== "ADBE Vector Group") continue;
+                var ocm = ocGrp.name.match(/^OC_(\d+)_(\d+)$/);
+                if (!ocm) continue;
+                var ocPI = parseInt(ocm[1], 10);
+                if (ocPI >= bakedPaths.length) continue;
+                var ocBP = bakedPaths[ocPI];
+                var ocRef = 'thisComp.layer("' + esc(oName) + '").content("' + esc(ocBP.groupName) + '").content("' + esc(ocBP.shapeName) + '").path';
+
+                var ocVecs = ocGrp.property("ADBE Vectors Group");
+                for (var ocsi = 1; ocsi <= ocVecs.numProperties; ocsi++) {
+                    if (ocVecs.property(ocsi).matchName === "ADBE Vector Shape - Group") {
+                        ocVecs.property(ocsi).property("ADBE Vector Shape").expression = [
+                            'var pts = ' + ocRef + '.points();',
+                            'var inT = ' + ocRef + '.inTangents();',
+                            'var outT = ' + ocRef + '.outTangents();',
+                            'createPath(pts,inT,outT,' + (ocBP.closed ? 'true' : 'false') + ');'
+                        ].join('\n');
+                    }
+                }
+            }
+        }
+
+        // Re-link PP_Bisectors
+        var bisLayer = null;
+        for (var bisfi = 1; bisfi <= comp.numLayers; bisfi++) {
+            if (comp.layer(bisfi).name === "PP_Bisectors") { bisLayer = comp.layer(bisfi); break; }
+        }
+        if (bisLayer) {
+            var bisRoot = bisLayer.property("ADBE Root Vectors Group");
+            for (var bisgi = 1; bisgi <= bisRoot.numProperties; bisgi++) {
+                var bisGrp = bisRoot.property(bisgi);
+                if (!bisGrp || bisGrp.matchName !== "ADBE Vector Group") continue;
+                var bism = bisGrp.name.match(/^PB_(\d+)_(\d+)_(\d+)$/);
+                if (!bism) continue;
+                var bisPI = parseInt(bism[1], 10);
+                var bisVI = parseInt(bism[2], 10), bisVJ = parseInt(bism[3], 10);
+                if (bisPI >= bakedPaths.length) continue;
+                var bisBP = bakedPaths[bisPI];
+                var bisRef = 'thisComp.layer("' + esc(oName) + '").content("' + esc(bisBP.groupName) + '").content("' + esc(bisBP.shapeName) + '").path';
+
+                var bisVecs = bisGrp.property("ADBE Vectors Group");
+                for (var bissi = 1; bissi <= bisVecs.numProperties; bissi++) {
+                    if (bisVecs.property(bissi).matchName === "ADBE Vector Shape - Group") {
+                        bisVecs.property(bissi).property("ADBE Vector Shape").expression = [
+                            'var C = ' + CTRL + ';',
+                            'var len = C.effect("Bisector Length")(1);',
+                            'var pts = ' + bisRef + '.points();',
+                            'var v0=pts[' + bisVI + '],v1=pts[' + bisVJ + '];',
+                            'var mx=(v0[0]+v1[0])/2,my=(v0[1]+v1[1])/2;',
+                            'var ex=v1[0]-v0[0],ey=v1[1]-v0[1];',
+                            'var el=Math.sqrt(ex*ex+ey*ey);',
+                            'if(el<0.001)createPath([[mx,my],[mx,my]],[],[],false);',
+                            'else{var px=-ey/el,py=ex/el;',
+                            'createPath([[mx-px*len,my-py*len],[mx+px*len,my+py*len]],[],[],false);}'
+                        ].join('\n');
+                    }
+                }
+            }
+        }
+
         app.endUndoGroup();
         alert("Baked!\n\n" +
               "PP_Outlines is now editable with the pen tool.\n" +
-              "Anchors, handles, labels, and grid lines\n" +
-              "are all re-linked to follow PP_Outlines.\n\n" +
-              "Move a point and everything follows \u2014 including the grid.");
+              "All layers (anchors, handles, labels, grid,\n" +
+              "circumcircles, tangents, triangulation,\n" +
+              "offset contours, bisectors) follow PP_Outlines.\n\n" +
+              "Move a point and everything follows.");
     }
 
     // ===================================================================
@@ -1359,19 +2118,16 @@
     notePanel.alignChildren = ["fill", "top"];
     notePanel.margins = [10, 18, 10, 8];
     notePanel.add("statictext", undefined,
-        "Construction-style animation \u2014 no opacity fades.\n\n" +
+        "All geometry is expression-linked.\n\n" +
         "PP_Control null sliders:\n" +
         "  Timeline (0\u2192100): master choreography\n" +
-        "    Grid draws on \u2192 Outlines draw on \u2192\n" +
-        "    Anchors pop \u2192 Handles pop \u2192 Labels pop\n\n" +
-        "  Per-element overrides (0\u2192100):\n" +
-        "    Grid Draw, Outline Draw, Anchor Pop,\n" +
-        "    Handle Pop, Label Pop\n\n" +
-        "  Easing: controls ease-out curve shape\n" +
-        "  Stagger: sequential reveal within groups\n\n" +
-        "  BAKE: pen-tool edit outlines, visuals follow.",
+        "  Grid Elements Opacity: construction layers\n" +
+        "  Easing / Stagger: animation controls\n\n" +
+        "  BAKE: edit outlines with pen tool,\n" +
+        "  all visuals (including construction\n" +
+        "  geometry) follow automatically.",
         { multiline: true }
-    ).preferredSize = [-1, 185];
+    ).preferredSize = [-1, 195];
 
     // ===================================================================
     //  BUTTON HANDLERS
